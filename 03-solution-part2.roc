@@ -11,26 +11,27 @@ Rucksack : List Str
 Group : [Group Rucksack Rucksack Rucksack]
 
 main =
+    toNoneEmptyLines : Str -> List Str
+    toNoneEmptyLines = \str ->
+        str
+        |> Str.split "\n"
+        |> List.map Str.trim
+        |> List.dropIf Str.isEmpty
+
     task =
         input <- await (File.readUtf8 (Path.fromStr "./03-input"))
         input
+            |> toNoneEmptyLines
             |> solve
             |> Num.toStr
             |> Stdout.line
 
     Task.mapFail task (\_ -> crash "oh no")
 
-toNoneEmptyLines : Str -> List Str
-toNoneEmptyLines = \str ->
-    str
-    |> Str.split "\n"
-    |> List.map Str.trim
-    |> List.dropIf Str.isEmpty
-
-solve : Str -> Priority
-solve = \input ->
-    makeGroups : List Str -> List Group
-    makeGroups = \lines ->
+solve : List Str -> Priority
+solve = \lines ->
+    groups : List Group
+    groups =
         go = \acc, elem ->
             newRucksack = Str.graphemes elem
             newGroup = [newRucksack]
@@ -85,9 +86,7 @@ solve = \input ->
             else
                 Nothing
 
-    input
-         |> toNoneEmptyLines
-         |> makeGroups
+    groups
          |> Maybe.filterMap getOverlappingChar
          |> Maybe.filterMap calcPriority
          |> List.sum
