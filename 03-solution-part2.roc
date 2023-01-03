@@ -77,15 +77,13 @@ solve = \input ->
         |> List.first
         |> Maybe.fromResult
         |> Maybe.map Num.toU16
-        |> Maybe.andThen (\x ->
+        |> Maybe.andThen \x ->
             if x >= 97 && x <= 122 then
                 Just (x - 96)
             else if x >= 65 && x <= 90 then
                 Just (x - 38)
             else
                 Nothing
-
-        )
 
     input
          |> toNoneEmptyLines
