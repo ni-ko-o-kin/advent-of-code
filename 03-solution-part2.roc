@@ -34,20 +34,16 @@ solve = \lines ->
     groups =
         go = \acc, elem ->
             newRucksack = Str.graphemes elem
-            newGroup = [newRucksack]
 
-            when List.last acc is
-                Ok lastGroup ->
-                    if List.len lastGroup == 3 then
-                        List.append acc newGroup
+            when acc is
+                [] ->
+                    [[newRucksack]]
 
-                    else
-                        updatedGroup = List.append lastGroup newRucksack
-                        lastGroupIndex = (List.len acc - 1)
-                        List.set acc lastGroupIndex updatedGroup
+                [.., [_, _, _]] ->
+                    List.append acc [newRucksack]
 
-                Err _ ->
-                    List.append acc newGroup
+                [.., unfinshedGroup] ->
+                    List.set acc (List.len acc - 1) (List.append unfinshedGroup newRucksack)
 
         makeGroup : List Rucksack -> Maybe Group
         makeGroup = \rucksacks ->
