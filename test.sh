@@ -1,9 +1,15 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
-clear
+FILE=$1
+
+function rocTest {
+    clear
+    roc dev "${FILE}"
+}
+
+rocTest
 
 while inotifywait -e close_write $1
 do
-    clear
-    roc test $1
+    rocTest
 done

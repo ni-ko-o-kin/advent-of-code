@@ -6,6 +6,7 @@ interface Maybe
         andThen,
         fromResult,
         keepJusts,
+        filterMap,
         withDefault
     ]
     imports []
@@ -58,10 +59,16 @@ keepJusts = \xs ->
                 acc
     List.walk xs [] go
 
-withDefault : a, Maybe a -> a
-withDefault = \defaultValue, maybe ->
+withDefault : Maybe a, a -> a
+withDefault = \maybe, defaultValue ->
     when maybe is
         Just x ->
             x
         Nothing ->
             defaultValue
+
+filterMap : List a, (a -> Maybe b) -> List b
+filterMap = \xs, fn ->
+    xs
+    |> List.map fn
+    |> keepJusts

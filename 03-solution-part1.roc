@@ -5,7 +5,6 @@ app "hello"
 
 # a-z 1-26
 # A-Z 27-52
-# C 3 for scissors
 
 Priority : U16
 Compartments : { first: List Str, second: List Str }
