@@ -2,6 +2,8 @@
 
 FILE=$1
 
+LIB="Maybe.roc Result.roc Stack.roc"
+
 function rocDev {
     clear
     roc dev "${FILE}"
@@ -9,7 +11,7 @@ function rocDev {
 
 rocDev
 
-while inotifywait -e close_write $1
+while inotifywait -e close_write $1 $LIB
 do
     rocDev
 done
