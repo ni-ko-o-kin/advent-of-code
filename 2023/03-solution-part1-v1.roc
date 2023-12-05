@@ -6,6 +6,8 @@ app "advent-of-code"
     ]
     provides [main] to pf
 
+# nice and readable solution but inefficient
+
 main =
     input
     |> parse
@@ -15,28 +17,45 @@ main =
 
 Validity : [Valid, Invalid, NotCheckedYet]
 Index : { col: Nat, row: Nat }
-Field : [Symbol Index, Digit Index Nat Validity]
+Field : [Symbol Index, Digit (List Index) Nat Validity]
 
-parse : Str -> Set Field
+parse : Str -> Dict Index Field
 parse = \lines ->
     lines
     |> Str.split "\n"
-    |> List.walkWithIndex (Set.empty {}) \acc, line, rowNumber ->
+    |> List.walkWithIndex (Dict.empty {}) \acc, line, rowNumber ->
         line
         |> Str.graphemes
         |> List.walkWithIndex acc \innerAcc, char, colNumber ->
+            currentIndex = { row: rowNumber, col: colNumber }
+
             if Str.contains "1234567890" char then
                 when Str.toNat char is
                     Ok digit ->
-                        Set.insert innerAcc (Digit { row: rowNumber, col: colNumber } digit NotCheckedYet)
+                        newDigit = (Digit [currentIndex] digit NotCheckedYet)
+
+                        if colNumber > 0 then
+                            previousIndex = { row: rowNumber, col: colNumber - 1 }
+                            previous = Dict.get innerAcc previousIndex
+
+                            when previous is
+                                Ok (Digit previousIndices previousValue _) ->
+                                    innerAcc
+                                    |> Dict.insert currentIndex (Digit (List.append previousIndices currentIndex) (previousValue * 10 + digit) NotCheckedYet)
+                                    |> Dict.remove previousIndex
+
+                                _ ->
+                                    Dict.insert innerAcc currentIndex newDigit
+                        else
+                            Dict.insert innerAcc currentIndex newDigit
                     Err _ ->
                         innerAcc
             else if Str.contains "@+-#!§$%&/()=?*~" char then
-                Set.insert innerAcc (Symbol { row: rowNumber, col: colNumber })
+                Dict.insert innerAcc currentIndex (Symbol currentIndex)
             else
                 innerAcc
 
-solve : Set Field -> Nat
+solve : Dict Index Field -> Nat
 solve = \fields ->
     checkAndAddIndex : Index, [Up, Down, Stay], [Left, Right, Stay] -> Result Index [Overflow]
     checkAndAddIndex = \index, rowDirection, colDirection ->
@@ -57,27 +76,39 @@ solve = \fields ->
             Ok {row: rowToCheck , col: colToCheck}
 
     fields
-    |> Set.map \field ->
+    |> Dict.map \_, field ->
         when field is
-            Digit digitIndex value _ ->
-                [ checkAndAddIndex digitIndex Up Left
-                , checkAndAddIndex digitIndex Up Stay
-                , checkAndAddIndex digitIndex Up Right
-                , checkAndAddIndex digitIndex Stay Left
-                , checkAndAddIndex digitIndex Stay Stay
-                , checkAndAddIndex digitIndex Stay Right
-                , checkAndAddIndex digitIndex Down Left
-                , checkAndAddIndex digitIndex Down Stay
-                , checkAndAddIndex digitIndex Down Right
-                ]
-                |> List.keepOks \x -> x
-                |> List.any
-                    \symbolIndex -> Set.contains fields (Symbol {row: symbolIndex.row, col: symbolIndex.col})
-                |> \anySymbolsAdjacent ->
-                    if anySymbolsAdjacent then
-                        Digit { row: digitIndex.row, col: digitIndex.col } value Valid
-                    else
-                        Digit { row: digitIndex.row, col: digitIndex.col } value Invalid
+            Digit digitIndices value _ ->
+                go = \digitIndex ->
+                    [ checkAndAddIndex digitIndex Up Left
+                    , checkAndAddIndex digitIndex Up Stay
+                    , checkAndAddIndex digitIndex Up Right
+                    , checkAndAddIndex digitIndex Stay Left
+                    , checkAndAddIndex digitIndex Stay Stay
+                    , checkAndAddIndex digitIndex Stay Right
+                    , checkAndAddIndex digitIndex Down Left
+                    , checkAndAddIndex digitIndex Down Stay
+                    , checkAndAddIndex digitIndex Down Right
+                    ]
+                    |> List.keepOks \x -> x
+                    |> List.any \possibleSymbolIndex ->
+                        possibleSymbolField = Dict.get fields possibleSymbolIndex
+                        when possibleSymbolField is
+                            Ok (Symbol _) -> Bool.true
+                            _ -> Bool.false
+
+
+                anySymbolsAdjacent = List.any digitIndices go
+
+                if anySymbolsAdjacent then
+                    Digit digitIndices value Valid
+                else
+                    Digit digitIndices value Invalid
             _ ->
                 field
-    |> \_ -> 1
+    |> Dict.walk 0 \acc, _, cur ->
+        when cur is
+            Digit _ value Valid ->
+                acc + value
+            _ ->
+                acc
