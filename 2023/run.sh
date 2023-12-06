@@ -2,6 +2,12 @@
 
 FILE=$1
 
+function cleanup {
+    rm "${FILE}"
+}
+trap cleanup EXIT
+
+
 #LIB="Maybe.roc Result.roc Stack.roc"
 
 function rocDev {
