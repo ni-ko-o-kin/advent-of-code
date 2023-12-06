@@ -62,58 +62,75 @@ solve = \fields ->
         when field is
             Star ->
                 # first line
+                #                            w>1      w>2
                 # ??r.... .??r... ..??r.. ...??r. ....??r
                 # ...*... ...*... ...*... ...*... ...*...
 
                 # middle line
                 # ??r*... ...*r.. ...*?r. ...*??r
+                #                    w>1      w>2
 
                 # last line
                 # ...*... ...*... ...*... ...*... ...*...
                 # ??r.... .??r... ..??r.. ...??r. ....??r
+                #                            w>1      w>2
 
-                cols = List.range { start: At 0, end: Length 5 }
-
-                # TODO only allow ??r in first line with len 3 and ?r only with len 2 aso
+                cols =
+                    [ {col: 0, minWidth: 3 }
+                    , {col: 1, minWidth: 2 }
+                    , {col: 2, minWidth: 1 }
+                    , {col: 3, minWidth: 1 }
+                    , {col: 4, minWidth: 1 }
+                    ]
 
                 firstLine =
-                    List.keepOks cols \i ->
+                    List.keepOks cols \colAndWidth ->
                         r <- Result.try (Num.subChecked starIndex.row 1)
-                        c <- Result.try (Num.subChecked (starIndex.col + 3) i)
+                        c <- Result.try (Num.subChecked (starIndex.col + 3) colAndWidth.col)
 
                         when (Dict.get fields {row: r, col: c}) is
-                            Ok (Digit value _ _) -> Ok value
-                            _ -> Err NotADigit
+                            Ok (Digit value width _) ->
+                                if width >= colAndWidth.minWidth then
+                                    Ok value
+                                else
+                                    Err NotInRangeOfAStar
+                            _ ->
+                                Err NotADigit
 
                 lastLine =
-                    List.keepOks cols \i ->
-                        c <- Result.try (Num.subChecked (starIndex.col + 3) i)
+                    List.keepOks cols \colAndWidth ->
+                        c <- Result.try (Num.subChecked (starIndex.col + 3) colAndWidth.col)
 
                         when (Dict.get fields {row: starIndex.row + 1, col: c}) is
-                            Ok (Digit value _ _) -> Ok value
+                            Ok (Digit value width _) ->
+                                if width >= colAndWidth.minWidth then
+                                    Ok value
+                                else
+                                    Err NotInRangeOfAStar
                             _ -> Err NotADigit
 
                 middleLine =
-                    middleCols = List.keepOks
-                        [ Num.subChecked starIndex.col 1
-                        , Ok (starIndex.col + 1)
-                        , Ok (starIndex.col + 2)
-                        , Ok (starIndex.col + 3)
+                    middleRowCols =
+                        [ Num.subChecked starIndex.col 1 |> Result.map \x -> ({col: x, minWidth: 1})
+                        , Ok (starIndex.col + 1) |> Result.map \x -> ({col: x, minWidth: 1})
+                        , Ok (starIndex.col + 2) |> Result.map \x -> ({col: x, minWidth: 2})
+                        , Ok (starIndex.col + 3) |> Result.map \x -> ({col: x, minWidth: 3})
                         ]
-                        \x -> x
+                        |> List.keepOks \x -> x
 
-                    List.keepOks middleCols \middleCol ->
-                        when (Dict.get fields {row: starIndex.row + 1, col: middleCol}) is
-                            Ok (Digit value _ _) -> Ok value
+                    List.keepOks middleRowCols \middleCol ->
+                        when (Dict.get fields {row: starIndex.row, col: middleCol.col}) is
+                            Ok (Digit value width _) ->
+                                if width >= middleCol.minWidth then
+                                    Ok value
+                                else
+                                    Err NotInRangeOfAStar
                             _ -> Err NotADigit
 
-                values = [firstLine, middleLine, lastLine] |> List.join  |> Set.fromList |> Set.toList
-                dbg "---"
-                dbg values
-                dbg (List.len values == 2)
+                values = [firstLine, middleLine, lastLine] |> List.join |> Set.fromList |> Set.toList
                 if List.len values == 2 then
-                    value1 = values |> List.first |> Result.withDefault 1
-                    value2 = values |> List.last |> Result.withDefault 1
+                    value1 = values |> List.first |> Result.withDefault 0
+                    value2 = values |> List.last |> Result.withDefault 0
                     acc + (value1 * value2)
                 else
                     acc
