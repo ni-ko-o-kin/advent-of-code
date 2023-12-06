@@ -6,8 +6,6 @@ app "advent-of-code"
     ]
     provides [main] to pf
 
-# nice and readable solution but inefficient
-
 main =
     input
     |> parse
@@ -17,7 +15,7 @@ main =
 
 Validity : [Valid, Invalid, NotCheckedYet]
 Index : { col: Nat, row: Nat }
-Field : [Symbol Index, Digit (List Index) Nat Validity]
+Field : [Symbol, Digit Nat Validity]
 
 parse : Str -> Dict Index Field
 parse = \lines ->
@@ -32,16 +30,16 @@ parse = \lines ->
             if Str.contains "1234567890" char then
                 when Str.toNat char is
                     Ok digit ->
-                        newDigit = (Digit [currentIndex] digit NotCheckedYet)
+                        newDigit = (Digit digit NotCheckedYet)
 
                         if colNumber > 0 then
                             previousIndex = { row: rowNumber, col: colNumber - 1 }
                             previous = Dict.get innerAcc previousIndex
 
                             when previous is
-                                Ok (Digit previousIndices previousValue _) ->
+                                Ok (Digit previousValue _) ->
                                     innerAcc
-                                    |> Dict.insert currentIndex (Digit (List.append previousIndices currentIndex) (previousValue * 10 + digit) NotCheckedYet)
+                                    |> Dict.insert currentIndex (Digit (previousValue * 10 + digit) NotCheckedYet)
                                     |> Dict.remove previousIndex
 
                                 _ ->
@@ -51,64 +49,51 @@ parse = \lines ->
                     Err _ ->
                         innerAcc
             else if Str.contains "@+-#!§$%&/()=?*~" char then
-                Dict.insert innerAcc currentIndex (Symbol currentIndex)
+                Dict.insert innerAcc currentIndex Symbol
             else
                 innerAcc
 
 solve : Dict Index Field -> Nat
 solve = \fields ->
-    checkAndAddIndex : Index, [Up, Down, Stay], [Left, Right, Stay] -> Result Index [Overflow]
-    checkAndAddIndex = \index, rowDirection, colDirection ->
-        if rowDirection == Up && index.row == 0 then
-            Err Overflow
-        else if colDirection == Left && index.col == 0 then
-            Err Overflow
-        else
-            rowToCheck = when rowDirection is
-                Up -> index.row - 1
-                Down -> index.row + 1
-                Stay -> index.row
-            colToCheck = when colDirection is
-                Left -> index.col - 1
-                Right -> index.col + 1
-                Stay -> index.col
-
-            Ok {row: rowToCheck , col: colToCheck}
-
     fields
-    |> Dict.map \_, field ->
+    |> Dict.map \rightDigitIndex, field ->
         when field is
-            Digit digitIndices value _ ->
-                go = \digitIndex ->
-                    [ checkAndAddIndex digitIndex Up Left
-                    , checkAndAddIndex digitIndex Up Stay
-                    , checkAndAddIndex digitIndex Up Right
-                    , checkAndAddIndex digitIndex Stay Left
-                    , checkAndAddIndex digitIndex Stay Stay
-                    , checkAndAddIndex digitIndex Stay Right
-                    , checkAndAddIndex digitIndex Down Left
-                    , checkAndAddIndex digitIndex Down Stay
-                    , checkAndAddIndex digitIndex Down Right
-                    ]
+            Digit value _ ->
+                valueWidth = value |> Num.toStr |> Str.countGraphemes
+
+                # aaaaa
+                # bxxrc valueWidth=3(x+x+r,1+1+1) r=rightDigitIndex
+                # ddddd
+
+                cols =
+                    { start: At 0, end: Length (valueWidth + 2) }
+                    |> List.range
+                    |> List.keepOks \i -> Num.subChecked (rightDigitIndex.col + 1) i
+
+                a = Result.map (Num.subChecked rightDigitIndex.row 1) \r -> List.map cols \colForA -> {row: r, col: colForA}
+                b = Result.map (Num.subChecked rightDigitIndex.col valueWidth) \colForB -> List.single {row: rightDigitIndex.row, col: colForB}
+                c = Ok (List.single {row: rightDigitIndex.row, col: rightDigitIndex.col + 1})
+                d = Ok (List.map cols \colForD -> {row: rightDigitIndex.row + 1, col: colForD})
+
+                indicesAroundValue =
+                    [a,b,c,d]
                     |> List.keepOks \x -> x
-                    |> List.any \possibleSymbolIndex ->
-                        possibleSymbolField = Dict.get fields possibleSymbolIndex
-                        when possibleSymbolField is
-                            Ok (Symbol _) -> Bool.true
-                            _ -> Bool.false
+                    |> List.join
 
-
-                anySymbolsAdjacent = List.any digitIndices go
+                anySymbolsAdjacent = List.any indicesAroundValue \index ->
+                    when Dict.get fields index is
+                        Ok Symbol -> Bool.true
+                        _ -> Bool.false
 
                 if anySymbolsAdjacent then
-                    Digit digitIndices value Valid
+                    Digit value Valid
                 else
-                    Digit digitIndices value Invalid
+                    Digit value Invalid
             _ ->
                 field
     |> Dict.walk 0 \acc, _, cur ->
         when cur is
-            Digit _ value Valid ->
+            Digit value Valid ->
                 acc + value
             _ ->
                 acc
