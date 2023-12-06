@@ -1,24 +1,21 @@
 #!/usr/bin/env bash
 
-FILE=$1
+FILENAME=$1
 
 function cleanup {
-    rm "${FILE}"
+    rm "${FILENAME%.*}"
 }
 trap cleanup EXIT
 
 
-#LIB="Maybe.roc Result.roc Stack.roc"
-
 function rocDev {
     clear
-    roc dev "${FILE}"
+    roc dev "${FILENAME}"
 }
 
 rocDev
 
-# while inotifywait -e close_write $1 $LIB
-while inotifywait -e close_write $1
+while inotifywait -e close_write $FILENAME
 do
     rocDev
 done
