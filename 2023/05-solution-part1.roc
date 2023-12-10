@@ -18,26 +18,21 @@ main =
     |> Num.toStr
     |> Stdout.line
 
-Category : [ Seed , Soil , Fertilizer , Water , Light , Temperature , Humidity , Location]
-Entry : { category: Category, number: Nat }
-
-Game :
-    { seeds: List Nat
-    , mapping: Dict Entry Entry
-    }
+Game : { seeds: List Nat , mapping: List (List Entry)}
+Entry : { src: Nat, dest: Nat, range: Nat }
 
 parse : Str -> Game
 parse = \str ->
     parser : Parser _ Game
     parser =
-        parseCategory = \mapStr, srcCategory, destCategory ->
+        parseCategory = \mapStr  ->
             \pipeline ->
                 pipeline
                 |> skip (many (string "\n"))
                 |> skip (string (Str.concat mapStr " map:\n"))
                 |> keep
                     (many
-                        ((const \dest -> \src -> \range -> {dest: {category: destCategory, number: dest}, src: {category: srcCategory, number: src}, range})
+                        ((const \dest -> \src -> \range -> {dest, src, range})
                         |> keep digits
                         |> skip (string " ")
                         |> keep digits
@@ -46,51 +41,32 @@ parse = \str ->
                         |> skip (string "\n")))
 
         const \seeds -> \m1 -> \m2 -> \m3 -> \m4 -> \m5 -> \m6 -> \m7 ->
-            basicEntries = List.join [m1, m2, m3, m4, m5, m6, m7]
-            allEntries = List.walk basicEntries (Dict.empty {}) \acc, spec ->
-                     List.walk (List.range {start: At 0, end: Length spec.range}) acc \innerAcc, idx ->
-                        Dict.insert innerAcc
-                            ({category: spec.src.category, number: (spec.src.number + idx)})
-                            ({category: spec.dest.category, number: (spec.dest.number + idx)})
-            { seeds, mapping: allEntries }
+            { seeds, mapping: [m1, m2, m3, m4, m5, m6, m7] }
+
         |> skip (string "seeds: ")
         |> keep (digits |> sepBy (string " "))
 
-        |> (parseCategory "seed-to-soil" Seed Soil)
-        |> (parseCategory "soil-to-fertilizer" Soil Fertilizer)
-        |> (parseCategory "fertilizer-to-water" Fertilizer Water)
-        |> (parseCategory "water-to-light" Water Light)
-        |> (parseCategory "light-to-temperature" Light Temperature)
-        |> (parseCategory "temperature-to-humidity" Temperature Humidity)
-        |> (parseCategory "humidity-to-location" Humidity Location)
+        |> (parseCategory "seed-to-soil" )
+        |> (parseCategory "soil-to-fertilizer" )
+        |> (parseCategory "fertilizer-to-water" )
+        |> (parseCategory "water-to-light" )
+        |> (parseCategory "light-to-temperature" )
+        |> (parseCategory "temperature-to-humidity" )
+        |> (parseCategory "humidity-to-location" )
 
     parseStr parser str
-    |> Result.withDefault {seeds: [], mapping: Dict.empty {}}
+    |> Result.withDefault {seeds: [], mapping: []}
 
 solve : Game -> Nat
 solve = \{seeds, mapping} ->
-    findLocation = \seed ->
-        go = \srcEntry ->
-            when Dict.get mapping srcEntry is
-                Ok destEntry ->
-                    when destEntry.category is
-                        Location -> destEntry.number
-                        _ -> go destEntry
-                _ ->
-                    when srcEntry.category is
-                        Seed ->        go {category: Soil, number: srcEntry.number}
-                        Soil ->        go {category: Fertilizer, number: srcEntry.number}
-                        Fertilizer ->  go {category: Water, number: srcEntry.number}
-                        Water ->       go {category: Light, number: srcEntry.number}
-                        Light ->       go {category: Temperature, number: srcEntry.number}
-                        Temperature -> go {category: Humidity, number: srcEntry.number}
-                        Humidity ->    go {category: Location, number: srcEntry.number}
-                        Location ->    srcEntry.number
-
-        go {category: Seed, number: seed}
+    go = \number, entries ->
+        entries
+        |> List.findFirst \{src, range} -> number >= src && number < src + range
+        |> Result.map \{src, dest} -> dest + (number - src)
+        |> Result.withDefault number
 
     seeds
-    |> List.map findLocation
+    |> List.map \seed -> List.walk mapping seed go
     |> List.sortAsc
     |> List.first
     |> Result.withDefault 0
