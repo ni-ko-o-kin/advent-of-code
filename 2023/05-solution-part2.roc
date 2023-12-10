@@ -18,7 +18,8 @@ main =
     |> Num.toStr
     |> Stdout.line
 
-Game : { seeds: List Nat , mapping: List (List Entry)}
+Game : { seeds: List Seed , mapping: List (List Entry)}
+Seed : { start: Nat, range: Nat }
 Entry : { src: Nat, dest: Nat, range: Nat }
 
 parse : Str -> Game
@@ -45,10 +46,8 @@ parse = \str ->
                 List.chunksOf seeds 2
                 |> List.keepOks \xs ->
                     when xs is
-                        [x, y] -> Ok (x, y)
-                        _ -> Err NotATuple
-                |> List.joinMap  \(start,length) ->
-                    List.range { start: At start, end: Length length }
+                        [x, y] -> Ok {start: x, range: y}
+                        _ -> Err InvalidPair
             { seeds: seedsFromPairs, mapping: [m1, m2, m3, m4, m5, m6, m7] }
 
         |> skip (string "seeds: ")
@@ -67,16 +66,56 @@ parse = \str ->
 
 solve : Game -> Nat
 solve = \{seeds, mapping} ->
-    go = \number, entries ->
-        entries
-        |> List.findFirst \{src, range} -> number >= src && number < src + range
-        |> Result.map \{src, dest} -> dest + (number - src)
-        |> Result.withDefault number
+    findSeed : Nat -> Result Nat [NotFound]
+    findSeed = \initialDestination ->
+        isInSeeds : Nat -> Bool
+        isInSeeds = \seed ->
+            seeds
+            |> List.findFirst \{start, range} -> seed >= start && seed < start + range
+            |> Result.isOk
 
-    seeds
-    |> List.map \seed -> List.walk mapping seed go
-    |> List.sortAsc
-    |> List.first
+        go : Result Nat [NotFound], List (List Entry) -> Result Nat [NotFound]
+        go = \destinationResult, reverseMapping ->
+            when destinationResult is
+                Ok destination ->
+                    when reverseMapping is
+                        [] ->
+                            if isInSeeds destination then
+                                Ok destination
+                            else
+                                Err NotFound
+                        [entries, .. as rest] ->
+                            entries
+                            |> List.findFirst \{dest, range} -> destination >= dest && destination < dest + range
+                            |> Result.map \{src, dest} -> src + (destination - dest)
+                            |> go rest
+                            # .........................
+                            # .....ssss_sss............
+                            # ...........dddd_ddd......
+                Err _ ->
+                    destinationResult
+        go (Ok initialDestination) (List.reverse mapping)
+
+    findClosestLocation : Result Nat [NotFound], Entry -> Result Nat [NotFound]
+    findClosestLocation = \acc, entry ->
+        when acc is
+            Ok _ ->
+                acc
+            Err _ ->
+                List.range { start: At entry.dest, end: Length entry.range }
+                |> List.walk acc \innerAcc, currentDestination ->
+                    when acc is
+                        Ok _ ->
+                            innerAcc
+                        Err _ ->
+                            findSeed currentDestination
+                            |> Result.mapErr \_ -> NotFound
+
+    mapping
+    |> List.last
+    |> Result.withDefault []
+    |> List.sortWith \a,b -> if a.dest < b.dest then LT else GT
+    |> List.walk (Err NotFound) findClosestLocation
     |> Result.withDefault 0
 
 expect
