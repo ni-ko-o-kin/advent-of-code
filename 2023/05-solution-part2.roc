@@ -18,8 +18,8 @@ main =
     |> Num.toStr
     |> Stdout.line
 
-Game : { seeds: List Seed , mapping: List (List Entry)}
-Seed : { start: Nat, range: Nat }
+Game : { seeds: List Range , mapping: List (List Entry)}
+Range : { start: Nat, end: Nat }
 Entry : { src: Nat, dest: Nat, range: Nat }
 
 parse : Str -> Game
@@ -46,7 +46,7 @@ parse = \str ->
                 List.chunksOf seeds 2
                 |> List.keepOks \xs ->
                     when xs is
-                        [x, y] -> Ok {start: x, range: y}
+                        [x, y] -> Ok {start: x, end: x + (y - 1)}
                         _ -> Err InvalidPair
             { seeds: seedsFromPairs, mapping: [m1, m2, m3, m4, m5, m6, m7] }
 
@@ -66,56 +66,56 @@ parse = \str ->
 
 solve : Game -> Nat
 solve = \{seeds, mapping} ->
-    findSeed : Nat -> Result Nat [NotFound]
-    findSeed = \initialDestination ->
-        isInSeeds : Nat -> Bool
-        isInSeeds = \seed ->
-            seeds
-            |> List.findFirst \{start, range} -> seed >= start && seed < start + range
-            |> Result.isOk
+    findMappings : List Entry, Range -> (List Range, List Range)
+    findMappings = \entries, range ->
+        # find mappings for one range
+        List.walk entries ([], []) \(remaining, new), entry ->
+            if List.isEmpty remaining then
+                ([], new)
+            else
+                if entry.src > range.end then
+                    (remaining, new)
+                else if entry.src + entry.range < range.start then
+                    (remaining, new)
+                else if entry.src >= range.start && entry.src + entry.range <= range.end then
+                    beforeEntryRange =
+                        if (entry.src - 1) - range.start > 0 then
+                            Ok { start: range.start, end: entry.src - 1 }
+                        else
+                            Err ZeroLengthRange
+                    afterEntryRange =
+                        if range.end - (entry.src + entry.range + 1) > 0 then
+                            Ok { start: entry.src + entry.range + 1, end: range.end }
+                        else
+                            Err ZeroLengthRange
 
-        go : Result Nat [NotFound], List (List Entry) -> Result Nat [NotFound]
-        go = \destinationResult, reverseMapping ->
-            when destinationResult is
-                Ok destination ->
-                    when reverseMapping is
-                        [] ->
-                            if isInSeeds destination then
-                                Ok destination
-                            else
-                                Err NotFound
-                        [entries, .. as rest] ->
-                            entries
-                            |> List.findFirst \{dest, range} -> destination >= dest && destination < dest + range
-                            |> Result.map \{src, dest} -> src + (destination - dest)
-                            |> go rest
-                            # .........................
-                            # .....ssss_sss............
-                            # ...........dddd_ddd......
-                Err _ ->
-                    destinationResult
-        go (Ok initialDestination) (List.reverse mapping)
+                    ( List.concat remaining (List.keepOks [beforeEntryRange, afterEntryRange] \x -> x)
 
-    findClosestLocation : Result Nat [NotFound], Entry -> Result Nat [NotFound]
-    findClosestLocation = \acc, entry ->
-        when acc is
-            Ok _ ->
-                acc
-            Err _ ->
-                List.range { start: At entry.dest, end: Length entry.range }
-                |> List.walk acc \innerAcc, currentDestination ->
-                    when acc is
-                        Ok _ ->
-                            innerAcc
-                        Err _ ->
-                            findSeed currentDestination
-                            |> Result.mapErr \_ -> NotFound
+                    # TODO handle mapping of range inside entry
+                    , List.concat new []
+                    )
+                else if 1 then # handle entry left ouside of range and inside of range with right side
+                else if 1 then # same but for right side
+                else if 1 then # handle entry is bigger than range on both sides
+                else
+                    (remaining, new)
 
-    mapping
-    |> List.last
-    |> Result.withDefault []
-    |> List.sortWith \a,b -> if a.dest < b.dest then LT else GT
-    |> List.walk (Err NotFound) findClosestLocation
+    List.walk mapping seeds \ranges, m ->
+        go : List Range, List Range -> List Range
+        go = \remainingRanges, newRanges ->
+            when remainingRanges is
+                [] ->
+                    newRanges
+                [range, .. as rest] ->
+                    (moreRemainingRanges, moreNewRanges) = findMappings m range
+                    # TODO map moreRemainingRanges directly bc no mappings could be found
+
+                    go (List.concat rest moreRemainingRanges) (List.concat newRanges moreNewRanges)
+
+        go ranges []
+    |> List.map .start
+    |> List.sortAsc
+    |> List.first
     |> Result.withDefault 0
 
 expect
