@@ -19,7 +19,8 @@ main =
     |> Stdout.line
 
 Game : { seeds: List Nat , mapping: List (List Entry)}
-Entry : { src: Nat, dest: Nat, range: Nat }
+Range : { start: Nat, end: Nat }
+Entry : { src: Range, dest: Range }
 
 parse : Str -> Game
 parse = \str ->
@@ -32,7 +33,7 @@ parse = \str ->
                 |> skip (string (Str.concat mapStr " map:\n"))
                 |> keep
                     (many
-                        ((const \dest -> \src -> \range -> {dest, src, range})
+                        ((const \dest -> \src -> \range -> {dest: {start: dest, end: dest + range}, src: {start: src, end: src + range}})
                         |> keep digits
                         |> skip (string " ")
                         |> keep digits
@@ -61,8 +62,8 @@ solve : Game -> Nat
 solve = \{seeds, mapping} ->
     go = \number, entries ->
         entries
-        |> List.findFirst \{src, range} -> number >= src && number < src + range
-        |> Result.map \{src, dest} -> dest + (number - src)
+        |> List.findFirst \{src} -> number >= src.start && number < src.end
+        |> Result.map \{src, dest} -> dest.start + (number - src.start)
         |> Result.withDefault number
 
     seeds

@@ -20,7 +20,7 @@ main =
 
 Game : { seeds: List Range , mapping: List (List Entry)}
 Range : { start: Nat, end: Nat }
-Entry : { src: Nat, dest: Nat, range: Nat }
+Entry : { src: Range, dest: Range }
 
 parse : Str -> Game
 parse = \str ->
@@ -33,7 +33,7 @@ parse = \str ->
                 |> skip (string (Str.concat mapStr " map:\n"))
                 |> keep
                     (many
-                        ((const \dest -> \src -> \range -> {dest, src, range})
+                        ((const \dest -> \src -> \range -> {dest: {start: dest, end: dest + (range - 1)}, src: {start: src, end: src + (range - 1)}})
                         |> keep digits
                         |> skip (string " ")
                         |> keep digits
@@ -66,95 +66,141 @@ parse = \str ->
 
 solve : Game -> Nat
 solve = \{seeds, mapping} ->
-    findMappings : List Entry, Range -> (List Range, List Range)
-    findMappings = \entries, range ->
+    dbg seeds
+    findMappings : List Entry, Range -> List Range
+    findMappings = \entries, originalRange ->
         # find mappings for one range
-        List.walk entries ([], []) \(remaining, new), entry ->
-            if List.isEmpty remaining then
-                ([], new)
-            else
-                if entry.src > range.end then
-                    (remaining, new)
-                else if entry.src + entry.range < range.start then
-                    (remaining, new)
-                else if entry.src >= range.start && entry.src + entry.range <= range.end then
-                    beforeEntryRange =
-                        if (entry.src - 1) - range.start > 0 then
-                            Ok { start: range.start, end: entry.src - 1 }
-                        else
-                            Err ZeroLengthRange
-                    afterEntryRange =
-                        if range.end - (entry.src + entry.range + 1) > 0 then
-                            Ok { start: entry.src + entry.range + 1, end: range.end }
-                        else
-                            Err ZeroLengthRange
+        dbg entries
+        dbg originalRange
+        (finalRemaining, finalNew) = List.walk entries ([originalRange], []) \(r, n), entry ->
+            go = \remaining, notInEntry, new ->
+                when remaining is
+                    [] ->
+                        dbg "no remaining"
+                        (notInEntry, new)
 
-                    ( List.concat remaining (List.keepOks [beforeEntryRange, afterEntryRange] \x -> x)
+                    [range, .. as restOfRemaining] ->
+                        dbg range
+                        dbg restOfRemaining
+                        # not in range
+                        if entry.src.start > range.end || entry.src.end < range.start then
+                            go restOfRemaining (List.append notInEntry range) new
+                        else
+                            # full or partially in range
+                            p1 = Num.min entry.src.start range.start
+                            p2 = Num.max entry.src.start range.start
+                            p3 = Num.min entry.src.end range.end
+                            p4 = Num.max entry.src.end range.end
 
-                    # TODO handle mapping of range inside entry
-                    , List.concat new []
-                    )
-                else if 1 then # handle entry left ouside of range and inside of range with right side
-                else if 1 then # same but for right side
-                else if 1 then # handle entry is bigger than range on both sides
-                else
-                    (remaining, new)
+                            before = if p2 > range.start then Ok { start: p1, end: p2 } else Err NotInRange
+                            after = if p3 < range.end then Ok { start: p3, end: p4 } else Err NotInRange
+
+                            shift =
+                                if (entry.src.start >= entry.dest.start) then
+                                    RightShift (entry.src.start - entry.dest.start)
+                                else
+                                    LeftShift (entry.dest.start - entry.src.start)
+
+                            go
+                                restOfRemaining
+                                (notInEntry |> List.appendIfOk before |> List.appendIfOk after)
+                                (new |> List.append
+                                    { start: when shift is
+                                        RightShift x -> p2 - x
+                                        LeftShift x -> p2 + x
+                                    , end: when shift is
+                                        RightShift x -> p3 - x
+                                        LeftShift x -> p4 + x
+                                    })
+            go r [] n
+
+        # map ranges that have no mapping directly
+        List.concat finalRemaining finalNew
 
     List.walk mapping seeds \ranges, m ->
-        go : List Range, List Range -> List Range
-        go = \remainingRanges, newRanges ->
-            when remainingRanges is
-                [] ->
-                    newRanges
-                [range, .. as rest] ->
-                    (moreRemainingRanges, moreNewRanges) = findMappings m range
-                    # TODO map moreRemainingRanges directly bc no mappings could be found
+        dbg ranges
+        List.joinMap ranges \range ->
+            dbg range
+            findMappings m range
 
-                    go (List.concat rest moreRemainingRanges) (List.concat newRanges moreNewRanges)
-
-        go ranges []
     |> List.map .start
     |> List.sortAsc
+    |> \xs ->
+        dbg xs
+        xs
     |> List.first
     |> Result.withDefault 0
+
+# expect
+#     example =
+#         """
+#         seeds: 79 14 55 13
+
+#         seed-to-soil map:
+#         50 98 2
+#         52 50 48
+
+#         soil-to-fertilizer map:
+#         0 15 37
+#         37 52 2
+#         39 0 15
+
+#         fertilizer-to-water map:
+#         49 53 8
+#         0 11 42
+#         42 0 7
+#         57 7 4
+
+#         water-to-light map:
+#         88 18 7
+#         18 25 70
+
+#         light-to-temperature map:
+#         45 77 23
+#         81 45 19
+#         68 64 13
+
+#         temperature-to-humidity map:
+#         0 69 1
+#         1 0 69
+
+#         humidity-to-location map:
+#         60 56 37
+#         56 93 4
+
+#         """
+
+#     solution = example |> parse |> solve
+#     solution == 46
 
 expect
     example =
         """
-        seeds: 79 14 55 13
+        seeds: 1 1 0 1
 
         seed-to-soil map:
-        50 98 2
-        52 50 48
+        1 0 1
+        0 1 1
 
         soil-to-fertilizer map:
-        0 15 37
-        37 52 2
-        39 0 15
+        3 0 2
 
         fertilizer-to-water map:
-        49 53 8
-        0 11 42
-        42 0 7
-        57 7 4
+        1 1 1
 
         water-to-light map:
-        88 18 7
-        18 25 70
+        1 1 1
 
         light-to-temperature map:
-        45 77 23
-        81 45 19
-        68 64 13
+        1 1 1
 
         temperature-to-humidity map:
-        0 69 1
-        1 0 69
+        1 1 1
 
         humidity-to-location map:
-        60 56 37
-        56 93 4
+        1 1 1
 
         """
 
-    46 == (example |> parse |> solve)
+    solution = example |> parse |> solve
+    solution == 1
